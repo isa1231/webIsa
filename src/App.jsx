@@ -29,7 +29,7 @@ function App() {
 
   // Si no hay sesión, alternamos entre Login y Register según el estado 'currentView'
   return (
-    <div>
+    <div className="app-shell">
       {currentView === 'login' ? (
         <Login onSwitchToRegister={() => setCurrentView('register')} />
       ) : (

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import PasswordField from './PasswordField'
 
 export default function Login({ onSwitchToRegister }) {
   const [email, setEmail] = useState('')
@@ -12,12 +13,20 @@ export default function Login({ onSwitchToRegister }) {
     setLoading(true)
     setErrorMsg(null)
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
 
-    if (error) {
-      setErrorMsg(error.message)
+      if (error) {
+        setErrorMsg(error.message)
+      }
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'No se pudo iniciar sesión. Inténtalo de nuevo.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -28,19 +37,25 @@ export default function Login({ onSwitchToRegister }) {
       {errorMsg && <p className="auth-message auth-message--error" role="alert">{errorMsg}</p>}
 
       <form className="auth-form" onSubmit={handleLogin}>
-        <input
-          type="email"
-          placeholder="Correo electrónico"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Contraseña"
+        <div className="auth-field">
+          <label htmlFor="login-email">Correo electrónico</label>
+          <input
+            id="login-email"
+            type="email"
+            autoComplete="email"
+            placeholder="nombre@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <PasswordField
+          id="login-password"
+          label="Contraseña"
+          autoComplete="current-password"
+          placeholder="Tu contraseña"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
         />
         <button className="auth-submit" type="submit" disabled={loading}>
           {loading ? 'Ingresando...' : 'Ingresar'}

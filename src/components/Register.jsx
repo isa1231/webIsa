@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
+import PasswordField from './PasswordField'
 
 export default function Register({ onSwitchToLogin }) {
   const [nombre, setNombre] = useState('')
@@ -15,24 +16,29 @@ export default function Register({ onSwitchToLogin }) {
     setErrorMsg(null)
     setSuccessMsg(null)
 
-    const { error } = await supabase.auth.signUp({ 
-      email, 
-      password,
-      options: {
-        data: {
-          nombre: nombre, 
-        }
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            nombre: nombre.trim(),
+          },
+        },
+      })
+
+      if (error) {
+        setErrorMsg(error.message)
+      } else if (data.session) {
+        setSuccessMsg('¡Registro exitoso! Tu cuenta ya está lista.')
+      } else {
+        setSuccessMsg('Registro recibido. Revisa tu correo para confirmar la cuenta antes de iniciar sesión.')
       }
-    })
-    if (error) {
-      setErrorMsg(error.message)
-    } else {
-      setSuccessMsg('¡Registro exitoso! Ya puedes iniciar sesión.')
-      setTimeout(() => {
-        onSwitchToLogin() 
-      }, 2000)
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'No se pudo completar el registro. Inténtalo de nuevo.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -44,26 +50,38 @@ export default function Register({ onSwitchToLogin }) {
       {successMsg && <p className="auth-message auth-message--success" role="status">{successMsg}</p>}
 
       <form className="auth-form" onSubmit={handleRegister}>
-        <input
-          type="text"
-          placeholder="Nombre"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          required
-        />
-        <input
-          type="email"
-          placeholder="Correo electrónico"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Contraseña (mínimo 6 caracteres)"
+        <div className="auth-field">
+          <label htmlFor="register-name">Nombre</label>
+          <input
+            id="register-name"
+            type="text"
+            autoComplete="name"
+            placeholder="Tu nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            required
+          />
+        </div>
+        <div className="auth-field">
+          <label htmlFor="register-email">Correo electrónico</label>
+          <input
+            id="register-email"
+            type="email"
+            autoComplete="email"
+            placeholder="nombre@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <PasswordField
+          id="register-password"
+          label="Contraseña"
+          autoComplete="new-password"
+          placeholder="Mínimo 6 caracteres"
+          minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          required
         />
         <button className="auth-submit" type="submit" disabled={loading}>
           {loading ? 'Registrando...' : 'Registrarse'}

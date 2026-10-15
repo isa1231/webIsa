@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import NavBar from './NavBar/NavBar'
+import Footer from './Footer/Footer'
+import { filterProductsBySearch } from './ProductSearch/filterProductsBySearch'
+import { STORE_LOGO_BUCKET, STORE_LOGO_PATH } from './StoreLogo/storeLogoConfig'
 
 const normalizeProductName = (value) => value.trim().toLowerCase()
 
@@ -17,6 +21,10 @@ const sanitizeStock = (value) => value.replace(/\D/g, '')
 
 export default function Dashboard({ session }) {
   const [productos, setProductos] = useState([])
+  const [searchValue, setSearchValue] = useState('')
+  const [logoUrl, setLogoUrl] = useState(() =>
+    supabase.storage.from(STORE_LOGO_BUCKET).getPublicUrl(STORE_LOGO_PATH).data.publicUrl
+  )
   const [categorias, setCategorias] = useState([])
   const [categoryError, setCategoryError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -31,6 +39,7 @@ export default function Dashboard({ session }) {
 
   // Campos del formulario
   const [nombre, setNombre] = useState('')
+  const [marca, setMarca] = useState('')
   const [precio, setPrecio] = useState('')
   const [stock, setStock] = useState('')
   const [imagenUrl, setImagenUrl] = useState('')
@@ -85,6 +94,7 @@ export default function Dashboard({ session }) {
   // Limpiar formulario
   const resetForm = () => {
     setNombre('')
+    setMarca('')
     setPrecio('')
     setStock('')
     setImagenUrl('')
@@ -138,6 +148,7 @@ export default function Dashboard({ session }) {
 
       const payload = {
         nombre: cleanName,
+        marca: marca.trim() || null,
         precio: parseFloat(precio),
         stock: parseInt(stock, 10),
         imagen_url: imagenUrl.trim() || null,
@@ -145,14 +156,22 @@ export default function Dashboard({ session }) {
         creado_por: session.user.id,
       }
 
-      const { error } = editingId
-        ? await supabase.from('productos').update(payload).eq('id', editingId)
-        : await supabase.from('productos').insert([payload])
+      const saveQuery = editingId
+        ? supabase.from('productos').update(payload).eq('id', editingId)
+        : supabase.from('productos').insert([payload])
+      const { data: savedProduct, error } = await saveQuery
+        .select('id, marca')
+        .single()
 
       if (error) {
         setFormError(error.code === '23505'
           ? 'Ya existe un producto con ese nombre. Elige un nombre diferente.'
           : `No se pudo guardar el producto: ${error.message}`)
+        return
+      }
+
+      if (savedProduct.marca !== payload.marca) {
+        setFormError('Supabase guardó el producto, pero la marca devuelta no coincide. Verifica la columna marca y las reglas de la base de datos.')
         return
       }
 
@@ -172,6 +191,7 @@ export default function Dashboard({ session }) {
   const handleEdit = (prod) => {
     setEditingId(prod.id)
     setNombre(prod.nombre)
+    setMarca(prod.marca || '')
     setPrecio(String(prod.precio))
     setStock(String(prod.stock))
     setImagenUrl(prod.imagen_url || '')
@@ -246,49 +266,28 @@ export default function Dashboard({ session }) {
     }
   }, [deleteTarget])
 
+  const visibleProducts = filterProductsBySearch(productos, searchValue)
+  const handleSearch = (value) => {
+    setSearchValue(value)
+    if (value.trim()) setActivePanel('products')
+  }
+
   return (
     <main className="dashboard-screen">
+      <NavBar
+        activePanel={activePanel}
+        email={session.user.email}
+        logoUrl={logoUrl}
+        onNavigate={setActivePanel}
+        onSignOut={() => supabase.auth.signOut()}
+        onLogoChange={setLogoUrl}
+        searchValue={searchValue}
+        onSearch={handleSearch}
+      />
+
       <div className="dashboard-container">
-        <header className="dashboard-header">
-          <div className="dashboard-brand">
-            <h1>Gestión de productos</h1>
-            <p>Administra el catálogo de tu tienda en un solo lugar.</p>
-          </div>
-          <div className="dashboard-account">
-            <span className="dashboard-email">{session.user.email}</span>
-            <button className="dashboard-signout" onClick={() => supabase.auth.signOut()}>
-              Cerrar sesión
-            </button>
-          </div>
-        </header>
-
-        <nav className="dashboard-tabs" role="tablist" aria-label="Panel de productos">
-          <button
-            id="products-tab"
-            className={`dashboard-tab${activePanel === 'products' ? ' dashboard-tab--active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activePanel === 'products'}
-            aria-controls="products-panel"
-            onClick={() => setActivePanel('products')}
-          >
-            Catálogo <span className="dashboard-tab-count">{productos.length}</span>
-          </button>
-          <button
-            id="form-tab"
-            className={`dashboard-tab${activePanel === 'form' ? ' dashboard-tab--active' : ''}`}
-            type="button"
-            role="tab"
-            aria-selected={activePanel === 'form'}
-            aria-controls="form-panel"
-            onClick={() => setActivePanel('form')}
-          >
-            {editingId ? 'Editar producto' : 'Agregar producto'}
-          </button>
-        </nav>
-
         {activePanel === 'form' ? (
-        <section className="product-form-panel dashboard-tab-panel" id="form-panel" role="tabpanel" aria-labelledby="form-tab">
+        <section className="product-form-panel dashboard-tab-panel" id="form-panel" aria-label={editingId ? 'Editar producto' : 'Agregar producto'}>
           <div className="section-heading">
             <span className="section-kicker">{editingId ? 'ACTUALIZA TU CATÁLOGO' : 'NUEVO EN LA TIENDA'}</span>
             <h2>{editingId ? 'Editar producto' : 'Agregar producto'}</h2>
@@ -307,6 +306,16 @@ export default function Dashboard({ session }) {
                   setFormError('')
                 }}
                 required
+              />
+            </div>
+            <div className="product-field">
+              <label htmlFor="product-brand">Marca (opcional)</label>
+              <input
+                id="product-brand"
+                type="text"
+                placeholder="Ej. marca del producto"
+                value={marca}
+                onChange={(event) => setMarca(event.target.value)}
               />
             </div>
             <div className="product-field">
@@ -386,15 +395,23 @@ export default function Dashboard({ session }) {
           </form>
         </section>
         ) : (
-        <section className="product-list-panel dashboard-tab-panel" id="products-panel" role="tabpanel" aria-labelledby="products-tab">
+        <section className="product-list-panel dashboard-tab-panel" id="products-panel" aria-label="Catálogo de productos">
           <div className="section-heading">
-                       <h2>Tu catálogo</h2>
-            <p>{productos.length} {productos.length === 1 ? 'producto registrado' : 'productos registrados'} en tu tienda.</p>
+            <h2>Tu catálogo</h2>
+            <p>
+              {searchValue.trim()
+                ? `${visibleProducts.length} resultados para “${searchValue.trim()}”.`
+                : `${productos.length} ${productos.length === 1 ? 'producto registrado' : 'productos registrados'} en tu tienda.`}
+            </p>
           </div>
           {loading ? (
             <p className="product-state" role="status">Cargando productos...</p>
           ) : productos.length === 0 ? (
             <p className="product-state">Todavía no hay productos. Agrega el primero desde el formulario.</p>
+          ) : visibleProducts.length === 0 ? (
+            <p className="product-state" role="status">
+              No encontramos productos, marcas ni categorías que coincidan con “{searchValue}”.
+            </p>
           ) : (
             <div className="product-table-wrap">
               <table className="product-table">
@@ -402,6 +419,7 @@ export default function Dashboard({ session }) {
                   <tr>
                     <th scope="col">Imagen</th>
                     <th scope="col">Nombre</th>
+                    <th scope="col">Marca</th>
                     <th scope="col">Categoría</th>
                     <th scope="col">Precio</th>
                     <th scope="col">Stock</th>
@@ -409,7 +427,7 @@ export default function Dashboard({ session }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {productos.map((prod) => (
+                  {visibleProducts.map((prod) => (
                     <tr key={prod.id}>
                       <td className="product-image-cell">
                         {prod.imagen_url ? (
@@ -419,6 +437,7 @@ export default function Dashboard({ session }) {
                         )}
                       </td>
                       <td className="product-name-cell">{prod.nombre}</td>
+                      <td>{prod.marca || <span className="product-category-empty">Sin marca</span>}</td>
                       <td>
                         {prod.categorias?.nombre
                           ? <span className="product-category-badge">{prod.categorias.nombre}</span>
@@ -441,6 +460,7 @@ export default function Dashboard({ session }) {
         </section>
         )}
       </div>
+      <Footer onNavigate={setActivePanel} />
       {deleteTarget && (
         <div
           className="confirm-backdrop"

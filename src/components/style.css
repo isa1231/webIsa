@@ -343,8 +343,10 @@
 
 .navbar-brand-mark {
   display: grid;
-  width: 2.65rem;
-  height: 2.65rem;
+  width: var(--store-logo-size);
+  height: var(--store-logo-size);
+  flex: 0 0 var(--store-logo-size);
+  overflow: hidden;
   border-radius: 15px;
   background: linear-gradient(140deg, #b86c93, #704273);
   box-shadow: 0 6px 14px rgba(112, 66, 115, 0.2);
@@ -359,7 +361,7 @@
   width: 100%;
   height: 100%;
   border-radius: inherit;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .navbar-brand:hover .navbar-brand-mark {
@@ -1140,11 +1142,6 @@
 
   .dashboard-screen {
     padding-bottom: 1rem;
-  }
-
-  .navbar-brand-mark {
-    width: 2.35rem;
-    height: 2.35rem;
   }
 
   .navbar-email {
